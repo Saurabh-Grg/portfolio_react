@@ -8,6 +8,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useAuth } from "@/contexts/AuthContext";
 
 const formSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -16,13 +17,9 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
-interface AdminLoginProps {
-  onLogin: (credentials: { email: string; password: string }) => boolean;
-}
-
-const AdminLogin = ({ onLogin }: AdminLoginProps) => {
+const AdminLogin = () => {
+  const { login } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -33,11 +30,10 @@ const AdminLogin = ({ onLogin }: AdminLoginProps) => {
   });
 
   const handleSubmit = async (values: FormValues) => {
-    setIsLoading(true);
     try {
-      onLogin({ email: values.email, password: values.password });
-    } finally {
-      setIsLoading(false);
+      await login(values.email, values.password);
+    } catch (err) {
+      // Error is handled by AuthContext toast
     }
   };
 
@@ -109,15 +105,15 @@ const AdminLogin = ({ onLogin }: AdminLoginProps) => {
                   </FormItem>
                 )}
               />
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? "Logging in..." : "Login"}
+              <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting ? "Logging in..." : "Login"}
               </Button>
             </form>
           </Form>
         </CardContent>
         <CardFooter className="flex flex-col">
           <p className="text-sm text-muted-foreground text-center mt-2">
-            For demo purposes: email: admin@example.com, password: admin123
+            Enter your admin credentials to access the dashboard
           </p>
         </CardFooter>
       </Card>

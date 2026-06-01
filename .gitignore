@@ -12,6 +12,28 @@ dist
 dist-ssr
 *.local
 
+# Environment variables & secrets
+.env
+.env.local
+.env.*.local
+backend/.env
+backend/.env.local
+.env.production
+.env.development
+
+# API Keys & Credentials
+*.pem
+*.key
+*.crt
+.secrets
+credentials.json
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+database.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -22,3 +44,35 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Dependencies
+package-lock.json
+yarn.lock
+bun.lockb
+pnpm-lock.yaml
+
+# Admin pages (sensitive)
+# Uncomment to hide admin panel during development
+# src/pages/Admin.tsx
+# src/components/admin/
+
+# Build outputs
+.next
+out
+build
+
+# Temporary files
+tmp
+temp
+*.tmp

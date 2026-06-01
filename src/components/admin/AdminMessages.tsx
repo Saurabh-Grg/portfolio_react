@@ -37,15 +37,6 @@ const AdminMessages = () => {
     },
     {
       id: 2,
-      name: "Priya Sharma",
-      email: "priya.sharma@example.com",
-      subject: "Collaboration Opportunity",
-      message: "Hi Saurabh, I saw your portfolio and I'm impressed with your Flutter work. I'm a UI/UX designer and I'd love to collaborate with you on some projects. Please check out my portfolio at example.com/priya and let me know if you're interested.",
-      date: "2025-05-03T10:15:00",
-      isRead: true
-    },
-    {
-      id: 3,
       name: "Tech Solutions Inc.",
       email: "hiring@techsolutions.com",
       phone: "+91 88776 55443",
@@ -55,7 +46,7 @@ const AdminMessages = () => {
       isRead: true
     },
     {
-      id: 4,
+      id: 3,
       name: "Alex Chen",
       email: "alex.chen@example.com",
       subject: "App Development Query",
