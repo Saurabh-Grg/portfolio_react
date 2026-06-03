@@ -4,6 +4,9 @@ import { requireAuth } from "../middleware/auth.js";
 
 const router = express.Router();
 
+// Function to create router with upload middleware
+export default function createProfileRouter(upload) {
+
 // GET /api/profile — public
 router.get("/", async (req, res) => {
   try {
@@ -55,4 +58,65 @@ router.put("/", requireAuth, async (req, res) => {
   }
 });
 
-export default router;
+// POST /api/profile/avatar — admin only, upload avatar image
+router.post("/avatar", requireAuth, upload.single('avatar'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    console.log('📸 [Profile] Avatar uploaded:', req.file.filename);
+    
+    // Return the file URL
+    const avatarUrl = `/uploads/${req.file.filename}`;
+    
+    // Update profile with new avatar URL
+    const result = await pool.query(
+      `UPDATE profile SET
+        avatar_url = $1,
+        updated_at = NOW()
+      WHERE id = (SELECT id FROM profile LIMIT 1)
+      RETURNING *`,
+      [avatarUrl]
+    );
+
+    console.log('✅ [Profile] Avatar updated in database');
+    res.json({
+      message: 'Avatar uploaded successfully',
+      avatarUrl: avatarUrl,
+      profile: result.rows[0]
+    });
+  } catch (err) {
+    console.error('❌ [Profile] Avatar upload error:', err.message);
+    res.status(500).json({ error: 'Failed to upload avatar' });
+  }
+});
+
+// DELETE /api/profile/avatar — admin only, delete avatar
+router.delete("/avatar", requireAuth, async (req, res) => {
+  try {
+    console.log('🗑️ [Profile] Deleting avatar');
+    
+    // Update profile to remove avatar URL
+    const result = await pool.query(
+      `UPDATE profile SET
+        avatar_url = NULL,
+        updated_at = NOW()
+      WHERE id = (SELECT id FROM profile LIMIT 1)
+      RETURNING *`,
+      []
+    );
+
+    console.log('✅ [Profile] Avatar deleted');
+    res.json({
+      message: 'Avatar deleted successfully',
+      profile: result.rows[0]
+    });
+  } catch (err) {
+    console.error('❌ [Profile] Avatar delete error:', err.message);
+    res.status(500).json({ error: 'Failed to delete avatar' });
+  }
+});
+
+  return router;
+}

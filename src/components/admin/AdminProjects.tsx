@@ -1,421 +1,288 @@
-
 import { useState } from 'react';
-import { Plus, Pencil, Trash, Eye, Link as LinkIcon, Github } from 'lucide-react';
+import { Trash2, Edit2, Plus, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-
-// Define Project type
-interface Project {
-  id: number;
-  title: string;
-  description: string;
-  imageUrl: string;
-  demoUrl: string;
-  githubUrl: string;
-  technologies: string[];
-}
+import {
+  useProjects,
+  useCreateProject,
+  useUpdateProject,
+  useDeleteProject,
+} from '@/hooks/useQueryHooks';
+import type { Project } from '@/contexts/PortfolioContext';
 
 const AdminProjects = () => {
   const { toast } = useToast();
-  
-  // Mock projects data
-  const initialProjects: Project[] = [
-    {
-      id: 1,
-      title: "Flutter E-commerce App",
-      description: "A complete e-commerce solution built with Flutter and Firebase.",
-      imageUrl: "https://via.placeholder.com/300",
-      demoUrl: "https://example.com",
-      githubUrl: "https://github.com",
-      technologies: ["Flutter", "Firebase", "Dart"]
-    },
-    {
-      id: 2,
-      title: "Personal Finance Tracker",
-      description: "Track your expenses and income with this easy-to-use mobile application.",
-      imageUrl: "https://via.placeholder.com/300",
-      demoUrl: "https://example.com",
-      githubUrl: "https://github.com",
-      technologies: ["Flutter", "SQLite", "Riverpod"]
-    },
-    {
-      id: 3,
-      title: "Health Monitoring System",
-      description: "Monitor your health metrics and get insights on your well-being.",
-      imageUrl: "https://via.placeholder.com/300",
-      demoUrl: "https://example.com",
-      githubUrl: "https://github.com",
-      technologies: ["Flutter", "Firebase", "REST API"]
-    }
-  ];
+  const { data: projects = [], isLoading, error, refetch } = useProjects();
+  const { mutate: createProject, isPending: isCreating } = useCreateProject();
+  const { mutate: updateProject, isPending: isUpdating } = useUpdateProject();
+  const { mutate: deleteProject, isPending: isDeleting } = useDeleteProject();
 
-  const [projects, setProjects] = useState<Project[]>(initialProjects);
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [currentProject, setCurrentProject] = useState<Project | null>(null);
-  
-  const [formData, setFormData] = useState<Omit<Project, 'id'>>({
-    title: '',
-    description: '',
-    imageUrl: '',
-    demoUrl: '',
-    githubUrl: '',
-    technologies: []
-  });
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [formData, setFormData] = useState<Partial<Project>>({});
+  const [showForm, setShowForm] = useState(false);
 
-  const resetForm = () => {
-    setFormData({
-      title: '',
-      description: '',
-      imageUrl: '',
-      demoUrl: '',
-      githubUrl: '',
-      technologies: []
-    });
-  };
+  console.log('📊 [AdminProjects] Rendering with projects:', projects);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    
-    if (name === 'technologies') {
-      // Convert comma-separated values to array
-      setFormData(prev => ({
-        ...prev,
-        technologies: value.split(',').map(tech => tech.trim())
-      }));
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        [name]: value
-      }));
-    }
+    console.log(`📝 [AdminProjects] Input changed: ${name} = ${value}`);
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
   };
 
   const handleAddProject = () => {
-    const newProject = {
-      ...formData,
-      id: projects.length ? Math.max(...projects.map(p => p.id)) + 1 : 1
-    };
-    
-    setProjects(prev => [...prev, newProject]);
-    toast({
-      title: "Project added",
-      description: `${formData.title} has been added to your projects.`
-    });
-    resetForm();
-    setIsAddDialogOpen(false);
-  };
-
-  const handleEditClick = (project: Project) => {
-    setCurrentProject(project);
+    console.log('➕ [AdminProjects] Opening new project form');
+    setEditingId(null);
     setFormData({
-      title: project.title,
-      description: project.description,
-      imageUrl: project.imageUrl,
-      demoUrl: project.demoUrl,
-      githubUrl: project.githubUrl,
-      technologies: project.technologies
+      title: '',
+      description: '',
+      image_url: '',
+      tags: [],
+      demo_url: '',
+      github_url: '',
+      featured: false,
     });
-    setIsEditDialogOpen(true);
+    setShowForm(true);
   };
 
-  const handleUpdateProject = () => {
-    if (!currentProject) return;
-    
-    setProjects(prev => prev.map(project => 
-      project.id === currentProject.id ? { ...project, ...formData } : project
-    ));
-    
-    toast({
-      title: "Project updated",
-      description: `${formData.title} has been updated.`
-    });
-    resetForm();
-    setIsEditDialogOpen(false);
+  const handleEditProject = (project: Project) => {
+    console.log('✏️ [AdminProjects] Editing project:', project);
+    setEditingId(project.id);
+    setFormData(project);
+    setShowForm(true);
   };
 
-  const handleDeleteClick = (project: Project) => {
-    setCurrentProject(project);
-    setIsDeleteDialogOpen(true);
+  const handleSave = () => {
+    if (!formData.title) {
+      console.warn('⚠️ [AdminProjects] Title is required');
+      toast({
+        title: 'Error',
+        description: 'Title is required',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    console.log('💾 [AdminProjects] Saving project:', formData);
+
+    if (editingId) {
+      updateProject(
+        { id: editingId, ...formData },
+        {
+          onSuccess: () => {
+            console.log('✅ [AdminProjects] Project updated');
+            toast({ title: 'Success', description: 'Project updated successfully!' });
+            setShowForm(false);
+            setFormData({});
+            refetch();
+          },
+          onError: (err: any) => {
+            console.error('❌ [AdminProjects] Update failed:', err);
+            toast({
+              title: 'Error',
+              description: err?.message || 'Failed to update project',
+              variant: 'destructive',
+            });
+          },
+        }
+      );
+    } else {
+      createProject(formData as Omit<Project, 'id'>, {
+        onSuccess: () => {
+          console.log('✅ [AdminProjects] Project created');
+          toast({ title: 'Success', description: 'Project created successfully!' });
+          setShowForm(false);
+          setFormData({});
+          refetch();
+        },
+        onError: (err: any) => {
+          console.error('❌ [AdminProjects] Create failed:', err);
+          toast({
+            title: 'Error',
+            description: err?.message || 'Failed to create project',
+            variant: 'destructive',
+          });
+        },
+      });
+    }
   };
 
-  const handleDeleteProject = () => {
-    if (!currentProject) return;
-    
-    setProjects(prev => prev.filter(project => project.id !== currentProject.id));
-    toast({
-      title: "Project deleted",
-      description: `${currentProject.title} has been removed.`
-    });
-    setIsDeleteDialogOpen(false);
+  const handleDelete = (id: number) => {
+    if (window.confirm('Are you sure you want to delete this project?')) {
+      console.log('🗑️ [AdminProjects] Deleting project:', id);
+      deleteProject(id, {
+        onSuccess: () => {
+          console.log('✅ [AdminProjects] Project deleted');
+          toast({ title: 'Success', description: 'Project deleted successfully!' });
+          refetch();
+        },
+        onError: (err: any) => {
+          console.error('❌ [AdminProjects] Delete failed:', err);
+          toast({
+            title: 'Error',
+            description: err?.message || 'Failed to delete project',
+            variant: 'destructive',
+          });
+        },
+      });
+    }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary" />
+          <p className="text-muted-foreground">Loading projects...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex justify-between items-center">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Projects</h2>
-          <p className="text-muted-foreground">
-            Manage your portfolio projects here.
-          </p>
+          <p className="text-muted-foreground">Manage your portfolio projects</p>
         </div>
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-1">
-              <Plus className="h-4 w-4" />
-              Add Project
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px]">
-            <DialogHeader>
-              <DialogTitle>Add New Project</DialogTitle>
-              <DialogDescription>
-                Add a new project to your portfolio. Fill in the details below.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="title" className="text-right">Title</Label>
-                <Input
-                  id="title"
-                  name="title"
-                  value={formData.title}
-                  onChange={handleInputChange}
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="description" className="text-right">Description</Label>
-                <Textarea
-                  id="description"
-                  name="description"
-                  value={formData.description}
-                  onChange={handleInputChange}
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="imageUrl" className="text-right">Image URL</Label>
-                <Input
-                  id="imageUrl"
-                  name="imageUrl"
-                  value={formData.imageUrl}
-                  onChange={handleInputChange}
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="demoUrl" className="text-right">Demo URL</Label>
-                <Input
-                  id="demoUrl"
-                  name="demoUrl"
-                  value={formData.demoUrl}
-                  onChange={handleInputChange}
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="githubUrl" className="text-right">GitHub URL</Label>
-                <Input
-                  id="githubUrl"
-                  name="githubUrl"
-                  value={formData.githubUrl}
-                  onChange={handleInputChange}
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="technologies" className="text-right">Technologies</Label>
-                <Input
-                  id="technologies"
-                  name="technologies"
-                  value={formData.technologies.join(', ')}
-                  onChange={handleInputChange}
-                  placeholder="Comma-separated values: Flutter, Firebase, etc."
-                  className="col-span-3"
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="button" onClick={handleAddProject}>
-                Add Project
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <Button onClick={handleAddProject} disabled={isCreating || isUpdating}>
+          <Plus className="h-4 w-4 mr-2" />
+          Add Project
+        </Button>
       </div>
 
-      {/* Projects Table */}
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Title</TableHead>
-                <TableHead>Technologies</TableHead>
-                <TableHead>Links</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {projects.map((project) => (
-                <TableRow key={project.id}>
-                  <TableCell className="font-medium">{project.title}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {project.technologies.map((tech, index) => (
-                        <span 
-                          key={index} 
-                          className="bg-secondary text-secondary-foreground text-xs rounded px-2 py-1"
-                        >
-                          {tech}
-                        </span>
-                      ))}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex space-x-2">
-                      <a href={project.demoUrl} target="_blank" rel="noopener noreferrer">
-                        <Button variant="outline" size="icon">
-                          <LinkIcon className="h-4 w-4" />
-                        </Button>
-                      </a>
-                      <a href={project.githubUrl} target="_blank" rel="noopener noreferrer">
-                        <Button variant="outline" size="icon">
-                          <Github className="h-4 w-4" />
-                        </Button>
-                      </a>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end space-x-2">
-                      <Button variant="ghost" size="icon" onClick={() => handleEditClick(project)}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(project)}>
-                        <Trash className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>Failed to load projects</AlertDescription>
+        </Alert>
+      )}
 
-      {/* Edit Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>Edit Project</DialogTitle>
-            <DialogDescription>
-              Make changes to the project details below.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-title" className="text-right">Title</Label>
+      {showForm && (
+        <Card>
+          <CardHeader>
+            <CardTitle>{editingId ? 'Edit Project' : 'New Project'}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="title">Title</Label>
               <Input
-                id="edit-title"
+                id="title"
                 name="title"
-                value={formData.title}
+                value={formData.title || ''}
                 onChange={handleInputChange}
-                className="col-span-3"
+                disabled={isCreating || isUpdating}
               />
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-description" className="text-right">Description</Label>
+            <div className="space-y-2">
+              <Label htmlFor="description">Description</Label>
               <Textarea
-                id="edit-description"
+                id="description"
                 name="description"
-                value={formData.description}
+                value={formData.description || ''}
                 onChange={handleInputChange}
-                className="col-span-3"
+                disabled={isCreating || isUpdating}
+                rows={4}
               />
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-imageUrl" className="text-right">Image URL</Label>
-              <Input
-                id="edit-imageUrl"
-                name="imageUrl"
-                value={formData.imageUrl}
-                onChange={handleInputChange}
-                className="col-span-3"
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="image_url">Image URL</Label>
+                <Input
+                  id="image_url"
+                  name="image_url"
+                  value={formData.image_url || ''}
+                  onChange={handleInputChange}
+                  disabled={isCreating || isUpdating}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="github_url">GitHub URL</Label>
+                <Input
+                  id="github_url"
+                  name="github_url"
+                  value={formData.github_url || ''}
+                  onChange={handleInputChange}
+                  disabled={isCreating || isUpdating}
+                />
+              </div>
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-demoUrl" className="text-right">Demo URL</Label>
-              <Input
-                id="edit-demoUrl"
-                name="demoUrl"
-                value={formData.demoUrl}
-                onChange={handleInputChange}
-                className="col-span-3"
-              />
+            <div className="flex gap-2">
+              <Button onClick={handleSave} disabled={isCreating || isUpdating}>
+                {isCreating || isUpdating ? 'Saving...' : 'Save'}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowForm(false);
+                  setFormData({});
+                }}
+              >
+                Cancel
+              </Button>
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-githubUrl" className="text-right">GitHub URL</Label>
-              <Input
-                id="edit-githubUrl"
-                name="githubUrl"
-                value={formData.githubUrl}
-                onChange={handleInputChange}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-technologies" className="text-right">Technologies</Label>
-              <Input
-                id="edit-technologies"
-                name="technologies"
-                value={formData.technologies.join(', ')}
-                onChange={handleInputChange}
-                placeholder="Comma-separated values: Flutter, Firebase, etc."
-                className="col-span-3"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="button" onClick={handleUpdateProject}>
-              Update Project
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </CardContent>
+        </Card>
+      )}
 
-      {/* Delete Dialog */}
-      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Project</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete this project? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="button" variant="destructive" onClick={handleDeleteProject}>
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {projects.map((project) => (
+          <Card key={project.id}>
+            <CardHeader>
+              <div className="flex justify-between items-start">
+                <div>
+                  <CardTitle>{project.title}</CardTitle>
+                  <CardDescription>{project.description?.substring(0, 100)}...</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap gap-2">
+                {project.tags?.map((tag, i) => (
+                  <span key={i} className="bg-primary/10 text-primary px-2 py-1 rounded text-xs">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleEditProject(project)}
+                  disabled={isUpdating || isDeleting}
+                >
+                  <Edit2 className="h-4 w-4 mr-1" />
+                  Edit
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => handleDelete(project.id)}
+                  disabled={isDeleting}
+                >
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  Delete
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {projects.length === 0 && !showForm && (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>No projects yet. Create your first project!</AlertDescription>
+        </Alert>
+      )}
     </div>
   );
 };

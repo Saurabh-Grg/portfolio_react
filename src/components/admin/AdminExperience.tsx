@@ -1,489 +1,319 @@
-
 import { useState } from 'react';
-import { Plus, Pencil, Trash, Calendar } from 'lucide-react';
+import { Trash2, Edit2, Plus, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-
-// Define Experience type
-interface Experience {
-  id: number;
-  role: string;
-  company: string;
-  location: string;
-  startDate: string;
-  endDate: string;
-  description: string;
-  logo?: string;
-  isCurrent: boolean;
-}
+import {
+  useExperience,
+  useCreateExperience,
+  useUpdateExperience,
+  useDeleteExperience,
+} from '@/hooks/useQueryHooks';
+import type { Experience } from '@/contexts/PortfolioContext';
 
 const AdminExperience = () => {
   const { toast } = useToast();
-  
-  // Mock experience data
-  const initialExperiences: Experience[] = [
-    {
-      id: 1,
-      role: "Senior Flutter Developer",
-      company: "Tech Solutions Inc.",
-      location: "New Delhi, India",
-      startDate: "2021-01",
-      endDate: "",
-      description: "Leading a team of 5 developers to build and maintain enterprise mobile applications. Implementing complex features and ensuring code quality through proper testing and documentation.",
-      logo: "https://via.placeholder.com/50",
-      isCurrent: true
-    },
-    {
-      id: 2,
-      role: "Flutter Developer",
-      company: "AppCreators Studio",
-      location: "Bengaluru, India",
-      startDate: "2018-06",
-      endDate: "2020-12",
-      description: "Developed and published over 10 mobile applications for iOS and Android using Flutter framework. Collaborated with design and backend teams to deliver high-quality applications.",
-      logo: "https://via.placeholder.com/50",
-      isCurrent: false
-    },
-    {
-      id: 3,
-      role: "Mobile App Developer (Intern)",
-      company: "CodeNest Technologies",
-      location: "Mumbai, India",
-      startDate: "2017-09",
-      endDate: "2018-03",
-      description: "Assisted in the development of mobile applications. Learned Flutter framework and contributed to real-world projects.",
-      logo: "https://via.placeholder.com/50",
-      isCurrent: false
-    }
-  ];
+  const { data: experiences = [], isLoading, error, refetch } = useExperience();
+  const { mutate: createExperience, isPending: isCreating } = useCreateExperience();
+  const { mutate: updateExperience, isPending: isUpdating } = useUpdateExperience();
+  const { mutate: deleteExperience, isPending: isDeleting } = useDeleteExperience();
 
-  const [experiences, setExperiences] = useState<Experience[]>(initialExperiences);
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [currentExperience, setCurrentExperience] = useState<Experience | null>(null);
-  
-  const [formData, setFormData] = useState<Omit<Experience, 'id'>>({
-    role: '',
-    company: '',
-    location: '',
-    startDate: '',
-    endDate: '',
-    description: '',
-    logo: '',
-    isCurrent: false
-  });
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [formData, setFormData] = useState<Partial<Experience>>({});
+  const [showForm, setShowForm] = useState(false);
 
-  const resetForm = () => {
-    setFormData({
-      role: '',
-      company: '',
-      location: '',
-      startDate: '',
-      endDate: '',
-      description: '',
-      logo: '',
-      isCurrent: false
-    });
-  };
+  console.log('📊 [AdminExperience] Rendering with experiences:', experiences);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value, type } = e.target as HTMLInputElement;
-    
-    if (type === 'checkbox') {
-      const checked = (e.target as HTMLInputElement).checked;
-      setFormData(prev => ({
-        ...prev,
-        [name]: checked,
-        ...(name === 'isCurrent' && checked ? { endDate: '' } : {})
-      }));
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        [name]: value
-      }));
-    }
+    const { name, value, type } = e.target;
+    console.log(`📝 [AdminExperience] Input changed: ${name} = ${value}`);
+    const checked = (e.target as HTMLInputElement).checked;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value,
+    }));
   };
 
   const handleAddExperience = () => {
-    const newExperience = {
-      ...formData,
-      id: experiences.length ? Math.max(...experiences.map(e => e.id)) + 1 : 1
-    };
-    
-    setExperiences(prev => [...prev, newExperience]);
-    toast({
-      title: "Experience added",
-      description: `${formData.role} at ${formData.company} has been added to your timeline.`
-    });
-    resetForm();
-    setIsAddDialogOpen(false);
-  };
-
-  const handleEditClick = (experience: Experience) => {
-    setCurrentExperience(experience);
+    console.log('➕ [AdminExperience] Opening new experience form');
+    setEditingId(null);
     setFormData({
-      role: experience.role,
-      company: experience.company,
-      location: experience.location,
-      startDate: experience.startDate,
-      endDate: experience.endDate,
-      description: experience.description,
-      logo: experience.logo || '',
-      isCurrent: experience.isCurrent
+      company: '',
+      position: '',
+      duration: '',
+      description: '',
+      type: 'work',
+      start_date: '',
+      end_date: '',
+      current: false,
     });
-    setIsEditDialogOpen(true);
+    setShowForm(true);
   };
 
-  const handleUpdateExperience = () => {
-    if (!currentExperience) return;
-    
-    setExperiences(prev => prev.map(experience => 
-      experience.id === currentExperience.id ? { ...experience, ...formData } : experience
-    ));
-    
-    toast({
-      title: "Experience updated",
-      description: `${formData.role} at ${formData.company} has been updated.`
-    });
-    resetForm();
-    setIsEditDialogOpen(false);
+  const handleEditExperience = (exp: Experience) => {
+    console.log('✏️ [AdminExperience] Editing experience:', exp);
+    setEditingId(exp.id);
+    setFormData(exp);
+    setShowForm(true);
   };
 
-  const handleDeleteClick = (experience: Experience) => {
-    setCurrentExperience(experience);
-    setIsDeleteDialogOpen(true);
-  };
+  const handleSave = () => {
+    if (!formData.company || !formData.position) {
+      console.warn('⚠️ [AdminExperience] Company and position are required');
+      toast({
+        title: 'Error',
+        description: 'Company and position are required',
+        variant: 'destructive',
+      });
+      return;
+    }
 
-  const handleDeleteExperience = () => {
-    if (!currentExperience) return;
-    
-    setExperiences(prev => prev.filter(experience => experience.id !== currentExperience.id));
-    toast({
-      title: "Experience deleted",
-      description: `${currentExperience.role} at ${currentExperience.company} has been removed.`
-    });
-    setIsDeleteDialogOpen(false);
-  };
+    console.log('💾 [AdminExperience] Saving experience:', formData);
 
-  const formatDate = (dateString: string) => {
-    if (!dateString) return '';
-    
-    try {
-      const [year, month] = dateString.split('-');
-      const date = new Date(parseInt(year), parseInt(month) - 1);
-      return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
-    } catch (error) {
-      return dateString;
+    if (editingId) {
+      updateExperience(
+        { id: editingId, ...formData },
+        {
+          onSuccess: () => {
+            console.log('✅ [AdminExperience] Experience updated');
+            toast({ title: 'Success', description: 'Experience updated successfully!' });
+            setShowForm(false);
+            setFormData({});
+            refetch();
+          },
+          onError: (err: any) => {
+            console.error('❌ [AdminExperience] Update failed:', err);
+            toast({
+              title: 'Error',
+              description: err?.message || 'Failed to update experience',
+              variant: 'destructive',
+            });
+          },
+        }
+      );
+    } else {
+      createExperience(formData as Omit<Experience, 'id'>, {
+        onSuccess: () => {
+          console.log('✅ [AdminExperience] Experience created');
+          toast({ title: 'Success', description: 'Experience created successfully!' });
+          setShowForm(false);
+          setFormData({});
+          refetch();
+        },
+        onError: (err: any) => {
+          console.error('❌ [AdminExperience] Create failed:', err);
+          toast({
+            title: 'Error',
+            description: err?.message || 'Failed to create experience',
+            variant: 'destructive',
+          });
+        },
+      });
     }
   };
 
-  const getDateRange = (startDate: string, endDate: string, isCurrent: boolean) => {
-    const start = formatDate(startDate);
-    const end = isCurrent ? 'Present' : formatDate(endDate);
-    return `${start} - ${end}`;
+  const handleDelete = (id: number) => {
+    if (window.confirm('Are you sure you want to delete this experience?')) {
+      console.log('🗑️ [AdminExperience] Deleting experience:', id);
+      deleteExperience(id, {
+        onSuccess: () => {
+          console.log('✅ [AdminExperience] Experience deleted');
+          toast({ title: 'Success', description: 'Experience deleted successfully!' });
+          refetch();
+        },
+        onError: (err: any) => {
+          console.error('❌ [AdminExperience] Delete failed:', err);
+          toast({
+            title: 'Error',
+            description: err?.message || 'Failed to delete experience',
+            variant: 'destructive',
+          });
+        },
+      });
+    }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary" />
+          <p className="text-muted-foreground">Loading experience...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex justify-between items-center">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Experience</h2>
-          <p className="text-muted-foreground">
-            Manage your work experience and career timeline.
-          </p>
+          <p className="text-muted-foreground">Manage your work experience and education</p>
         </div>
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-1">
-              <Plus className="h-4 w-4" />
-              Add Experience
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px]">
-            <DialogHeader>
-              <DialogTitle>Add New Experience</DialogTitle>
-              <DialogDescription>
-                Add a new position to your professional experience timeline.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="role">Job Title/Role</Label>
-                  <Input
-                    id="role"
-                    name="role"
-                    value={formData.role}
-                    onChange={handleInputChange}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="company">Company/Organization</Label>
-                  <Input
-                    id="company"
-                    name="company"
-                    value={formData.company}
-                    onChange={handleInputChange}
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="location">Location</Label>
-                <Input
-                  id="location"
-                  name="location"
-                  value={formData.location}
-                  onChange={handleInputChange}
-                  placeholder="City, Country"
-                />
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="startDate">Start Date</Label>
-                  <Input
-                    id="startDate"
-                    name="startDate"
-                    type="month"
-                    value={formData.startDate}
-                    onChange={handleInputChange}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="endDate">End Date</Label>
-                  <Input
-                    id="endDate"
-                    name="endDate"
-                    type="month"
-                    value={formData.endDate}
-                    onChange={handleInputChange}
-                    disabled={formData.isCurrent}
-                  />
-                </div>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Input
-                  id="isCurrent"
-                  name="isCurrent"
-                  type="checkbox"
-                  className="w-4 h-4"
-                  checked={formData.isCurrent}
-                  onChange={handleInputChange}
-                />
-                <Label htmlFor="isCurrent">I currently work here</Label>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  name="description"
-                  value={formData.description}
-                  onChange={handleInputChange}
-                  rows={4}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="logo">Company Logo URL</Label>
-                <Input
-                  id="logo"
-                  name="logo"
-                  value={formData.logo}
-                  onChange={handleInputChange}
-                  placeholder="https://example.com/logo.png"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Optional: Add a URL to the company logo
-                </p>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="button" onClick={handleAddExperience}>
-                Add Experience
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <Button onClick={handleAddExperience} disabled={isCreating || isUpdating}>
+          <Plus className="h-4 w-4 mr-2" />
+          Add Experience
+        </Button>
       </div>
 
-      {/* Experience Table */}
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Role</TableHead>
-                <TableHead>Company</TableHead>
-                <TableHead>Duration</TableHead>
-                <TableHead>Location</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {experiences.map((experience) => (
-                <TableRow key={experience.id}>
-                  <TableCell className="font-medium">{experience.role}</TableCell>
-                  <TableCell>{experience.company}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center">
-                      <Calendar className="h-4 w-4 mr-2 text-muted-foreground" />
-                      {getDateRange(experience.startDate, experience.endDate, experience.isCurrent)}
-                    </div>
-                  </TableCell>
-                  <TableCell>{experience.location}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end space-x-2">
-                      <Button variant="ghost" size="icon" onClick={() => handleEditClick(experience)}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(experience)}>
-                        <Trash className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>Failed to load experience</AlertDescription>
+        </Alert>
+      )}
 
-      {/* Edit Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>Edit Experience</DialogTitle>
-            <DialogDescription>
-              Update details about this professional experience.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {showForm && (
+        <Card>
+          <CardHeader>
+            <CardTitle>{editingId ? 'Edit Experience' : 'New Experience'}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="edit-role">Job Title/Role</Label>
+                <Label htmlFor="company">Company</Label>
                 <Input
-                  id="edit-role"
-                  name="role"
-                  value={formData.role}
-                  onChange={handleInputChange}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-company">Company/Organization</Label>
-                <Input
-                  id="edit-company"
+                  id="company"
                   name="company"
-                  value={formData.company}
+                  value={formData.company || ''}
                   onChange={handleInputChange}
+                  disabled={isCreating || isUpdating}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="position">Position</Label>
+                <Input
+                  id="position"
+                  name="position"
+                  value={formData.position || ''}
+                  onChange={handleInputChange}
+                  disabled={isCreating || isUpdating}
                 />
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-location">Location</Label>
-              <Input
-                id="edit-location"
-                name="location"
-                value={formData.location}
-                onChange={handleInputChange}
-                placeholder="City, Country"
-              />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-startDate">Start Date</Label>
-                <Input
-                  id="edit-startDate"
-                  name="startDate"
-                  type="month"
-                  value={formData.startDate}
-                  onChange={handleInputChange}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-endDate">End Date</Label>
-                <Input
-                  id="edit-endDate"
-                  name="endDate"
-                  type="month"
-                  value={formData.endDate}
-                  onChange={handleInputChange}
-                  disabled={formData.isCurrent}
-                />
-              </div>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Input
-                id="edit-isCurrent"
-                name="isCurrent"
-                type="checkbox"
-                className="w-4 h-4"
-                checked={formData.isCurrent}
-                onChange={handleInputChange}
-              />
-              <Label htmlFor="edit-isCurrent">I currently work here</Label>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-description">Description</Label>
+              <Label htmlFor="description">Description</Label>
               <Textarea
-                id="edit-description"
+                id="description"
                 name="description"
-                value={formData.description}
+                value={formData.description || ''}
                 onChange={handleInputChange}
+                disabled={isCreating || isUpdating}
                 rows={4}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-logo">Company Logo URL</Label>
-              <Input
-                id="edit-logo"
-                name="logo"
-                value={formData.logo}
-                onChange={handleInputChange}
-                placeholder="https://example.com/logo.png"
-              />
-              <p className="text-xs text-muted-foreground">
-                Optional: Add a URL to the company logo
-              </p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="start_date">Start Date</Label>
+                <Input
+                  id="start_date"
+                  name="start_date"
+                  type="date"
+                  value={formData.start_date || ''}
+                  onChange={handleInputChange}
+                  disabled={isCreating || isUpdating}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="end_date">End Date</Label>
+                <Input
+                  id="end_date"
+                  name="end_date"
+                  type="date"
+                  value={formData.end_date || ''}
+                  onChange={handleInputChange}
+                  disabled={isCreating || isUpdating || formData.current}
+                />
+              </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="button" onClick={handleUpdateExperience}>
-              Update Experience
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <div className="flex items-center gap-2">
+              <input
+                id="current"
+                name="current"
+                type="checkbox"
+                checked={formData.current || false}
+                onChange={handleInputChange}
+                disabled={isCreating || isUpdating}
+              />
+              <Label htmlFor="current" className="mb-0">
+                Currently working here
+              </Label>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={handleSave} disabled={isCreating || isUpdating}>
+                {isCreating || isUpdating ? 'Saving...' : 'Save'}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowForm(false);
+                  setFormData({});
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-      {/* Delete Dialog */}
-      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Experience</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete this experience? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="button" variant="destructive" onClick={handleDeleteExperience}>
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <div className="space-y-4">
+        {experiences.map((exp) => (
+          <Card key={exp.id}>
+            <CardHeader>
+              <div className="flex justify-between items-start">
+                <div>
+                  <CardTitle>{exp.company}</CardTitle>
+                  <CardDescription>{exp.position}</CardDescription>
+                </div>
+                {exp.current && (
+                  <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-semibold">
+                    Current
+                  </span>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm">{exp.description}</p>
+              <p className="text-xs text-muted-foreground">
+                {exp.start_date} {exp.end_date ? `- ${exp.end_date}` : '- Present'}
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleEditExperience(exp)}
+                  disabled={isUpdating || isDeleting}
+                >
+                  <Edit2 className="h-4 w-4 mr-1" />
+                  Edit
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => handleDelete(exp.id)}
+                  disabled={isDeleting}
+                >
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  Delete
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {experiences.length === 0 && !showForm && (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>No experience yet. Add your first entry!</AlertDescription>
+        </Alert>
+      )}
     </div>
   );
 };

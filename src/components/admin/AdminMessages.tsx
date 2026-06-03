@@ -1,288 +1,217 @@
-
 import { useState } from 'react';
-import { Trash, Check, Mail, Phone } from 'lucide-react';
+import { Trash2, Check, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-
-// Define Message type
-interface Message {
-  id: number;
-  name: string;
-  email: string;
-  phone?: string;
-  subject?: string;
-  message: string;
-  date: string;
-  isRead: boolean;
-}
+import {
+  useMessages,
+  useMarkMessageAsRead,
+  useDeleteMessage,
+} from '@/hooks/useQueryHooks';
 
 const AdminMessages = () => {
   const { toast } = useToast();
-  
-  // Mock messages data
-  const initialMessages: Message[] = [
-    {
-      id: 1,
-      name: "John Smith",
-      email: "john.smith@example.com",
-      phone: "+91 98765 43210",
-      subject: "Project Inquiry",
-      message: "Hello Saurabh, I'm interested in discussing a potential Flutter project for my company. We are looking to build a cross-platform app for inventory management. Please let me know your availability for a call next week.",
-      date: "2025-05-05T14:30:00",
-      isRead: false
-    },
-    {
-      id: 2,
-      name: "Tech Solutions Inc.",
-      email: "hiring@techsolutions.com",
-      phone: "+91 88776 55443",
-      subject: "Job Opportunity",
-      message: "Dear Saurabh, We have an exciting opportunity for a Senior Flutter Developer role at our company. Based on your portfolio and experience, we think you would be a great fit. Please let us know if you're interested in discussing this further.",
-      date: "2025-05-01T16:45:00",
-      isRead: true
-    },
-    {
-      id: 3,
-      name: "Alex Chen",
-      email: "alex.chen@example.com",
-      subject: "App Development Query",
-      message: "Hello, I need a Flutter app developed for my startup. It's a fitness tracking app with social features. Can you provide a quote and estimated timeline? I have some wireframes ready to share if you're interested.",
-      date: "2025-04-28T09:20:00",
-      isRead: false
-    }
-  ];
+  const { data: messages = [], isLoading, error, refetch } = useMessages();
+  const { mutate: markAsRead, isPending: isMarking } = useMarkMessageAsRead();
+  const { mutate: deleteMessage, isPending: isDeleting } = useDeleteMessage();
 
-  const [messages, setMessages] = useState<Message[]>(initialMessages);
-  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [currentMessage, setCurrentMessage] = useState<Message | null>(null);
-  
-  const handleViewMessage = (message: Message) => {
-    setCurrentMessage(message);
-    setIsViewDialogOpen(true);
-    
-    // Mark as read if not already
-    if (!message.isRead) {
-      setMessages(prev => prev.map(m => 
-        m.id === message.id ? { ...m, isRead: true } : m
-      ));
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+
+  console.log('📊 [AdminMessages] Rendering with messages:', messages);
+
+  const handleMarkAsRead = (id: number) => {
+    console.log(`📝 [AdminMessages] Marking message ${id} as read`);
+    markAsRead(id, {
+      onSuccess: () => {
+        console.log('✅ [AdminMessages] Message marked as read');
+        toast({ title: 'Success', description: 'Message marked as read!' });
+        refetch();
+      },
+      onError: (err: any) => {
+        console.error('❌ [AdminMessages] Failed to mark as read:', err);
+        toast({
+          title: 'Error',
+          description: err?.message || 'Failed to mark message as read',
+          variant: 'destructive',
+        });
+      },
+    });
+  };
+
+  const handleDelete = (id: number) => {
+    if (window.confirm('Are you sure you want to delete this message?')) {
+      console.log(`🗑️ [AdminMessages] Deleting message ${id}`);
+      deleteMessage(id, {
+        onSuccess: () => {
+          console.log('✅ [AdminMessages] Message deleted');
+          toast({ title: 'Success', description: 'Message deleted successfully!' });
+          setSelectedId(null);
+          refetch();
+        },
+        onError: (err: any) => {
+          console.error('❌ [AdminMessages] Delete failed:', err);
+          toast({
+            title: 'Error',
+            description: err?.message || 'Failed to delete message',
+            variant: 'destructive',
+          });
+        },
+      });
     }
   };
 
-  const handleDeleteClick = (message: Message) => {
-    setCurrentMessage(message);
-    setIsDeleteDialogOpen(true);
-  };
+  const unreadCount = messages.filter((m: any) => !m.is_read).length;
 
-  const handleDeleteMessage = () => {
-    if (!currentMessage) return;
-    
-    setMessages(prev => prev.filter(m => m.id !== currentMessage.id));
-    toast({
-      title: "Message deleted",
-      description: `Message from ${currentMessage.name} has been deleted.`
-    });
-    setIsDeleteDialogOpen(false);
-  };
-
-  const markAsRead = (message: Message) => {
-    setMessages(prev => prev.map(m => 
-      m.id === message.id ? { ...m, isRead: true } : m
-    ));
-    
-    toast({
-      title: "Message marked as read",
-      description: `Message from ${message.name} marked as read.`
-    });
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'short', 
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  const truncate = (text: string, maxLength: number) => {
-    return text.length > maxLength ? `${text.substring(0, maxLength)}...` : text;
-  };
-
-  const unreadCount = messages.filter(m => !m.isRead).length;
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary" />
+          <p className="text-muted-foreground">Loading messages...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex justify-between items-center">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Messages</h2>
-          <p className="text-muted-foreground">
-            Manage contact form submissions
-          </p>
+          <p className="text-muted-foreground">Manage contact form submissions</p>
         </div>
         {unreadCount > 0 && (
-          <Badge className="bg-flutter hover:bg-flutter-dark">
-            {unreadCount} Unread {unreadCount === 1 ? 'Message' : 'Messages'}
+          <Badge variant="destructive" className="text-lg px-3 py-1">
+            {unreadCount} Unread
           </Badge>
         )}
       </div>
 
-      {/* Messages Table */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle>Recent Messages</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {messages.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <Mail className="w-12 h-12 mx-auto mb-4 opacity-20" />
-              <p>No messages to display</p>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[200px]">From</TableHead>
-                  <TableHead className="hidden md:table-cell">Subject</TableHead>
-                  <TableHead className="hidden md:table-cell">Message</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {messages.map((message) => (
-                  <TableRow 
-                    key={message.id}
-                    className={message.isRead ? '' : 'font-medium bg-secondary/30'}
-                  >
-                    <TableCell className="font-medium">
-                      <div>{message.name}</div>
-                      <div className="text-xs text-muted-foreground">{message.email}</div>
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell">
-                      {message.subject || 'No subject'}
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell">
-                      {truncate(message.message, 40)}
-                    </TableCell>
-                    <TableCell>{formatDate(message.date)}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          onClick={() => handleViewMessage(message)}
-                        >
-                          <Mail className="h-4 w-4" />
-                        </Button>
-                        {!message.isRead && (
-                          <Button 
-                            variant="ghost" 
-                            size="icon"
-                            onClick={() => markAsRead(message)}
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>Failed to load messages</AlertDescription>
+        </Alert>
+      )}
+
+      {messages.length === 0 ? (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>No messages yet</AlertDescription>
+        </Alert>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Messages List */}
+          <div className="lg:col-span-1 space-y-2">
+            {messages.map((msg: any) => (
+              <Card
+                key={msg.id}
+                className={`cursor-pointer transition-colors ${
+                  selectedId === msg.id ? 'ring-2 ring-primary' : ''
+                } ${!msg.is_read ? 'bg-blue-50' : ''}`}
+                onClick={() => {
+                  console.log('📬 [AdminMessages] Selected message:', msg.id);
+                  setSelectedId(msg.id);
+                  if (!msg.is_read) {
+                    handleMarkAsRead(msg.id);
+                  }
+                }}
+              >
+                <CardContent className="pt-4">
+                  <div className="flex justify-between items-start gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm truncate">{msg.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{msg.subject}</p>
+                      <p className="text-xs text-muted-foreground truncate">{msg.email}</p>
+                    </div>
+                    {!msg.is_read && (
+                      <div className="w-3 h-3 rounded-full bg-primary flex-shrink-0"></div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Message Details */}
+          <div className="lg:col-span-2">
+            {selectedId ? (
+              (() => {
+                const msg = messages.find((m: any) => m.id === selectedId);
+                if (!msg) return null;
+
+                return (
+                  <Card>
+                    <CardHeader>
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <CardTitle>{msg.subject}</CardTitle>
+                          <CardDescription>{msg.name}</CardDescription>
+                        </div>
+                        <div className="flex gap-1">
+                          {!msg.is_read && (
+                            <Badge variant="secondary">Unread</Badge>
+                          )}
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold">From:</p>
+                        <p className="text-sm">{msg.email}</p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold">Received:</p>
+                        <p className="text-sm text-muted-foreground">
+                          {new Date(msg.created_at).toLocaleString()}
+                        </p>
+                      </div>
+
+                      <div className="border-t pt-4 space-y-2">
+                        <p className="text-sm font-semibold">Message:</p>
+                        <p className="text-sm whitespace-pre-wrap leading-relaxed">
+                          {msg.message}
+                        </p>
+                      </div>
+
+                      <div className="flex gap-2 pt-4">
+                        {!msg.is_read && (
+                          <Button
+                            size="sm"
+                            onClick={() => handleMarkAsRead(msg.id)}
+                            disabled={isMarking}
                           >
-                            <Check className="h-4 w-4" />
+                            <Check className="h-4 w-4 mr-2" />
+                            {isMarking ? 'Marking...' : 'Mark as Read'}
                           </Button>
                         )}
-                        <Button 
-                          variant="ghost" 
-                          size="icon"
-                          onClick={() => handleDeleteClick(message)}
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => handleDelete(msg.id)}
+                          disabled={isDeleting}
                         >
-                          <Trash className="h-4 w-4" />
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          {isDeleting ? 'Deleting...' : 'Delete'}
                         </Button>
                       </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* View Message Dialog */}
-      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>
-              {currentMessage?.subject || 'Contact Message'}
-            </DialogTitle>
-            <DialogDescription>
-              Message from {currentMessage?.name} on {currentMessage && formatDate(currentMessage.date)}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <div className="flex items-center gap-2 text-sm">
-                <Mail className="h-4 w-4 text-muted-foreground" />
-                <span className="font-medium">Email:</span>
-                <a 
-                  href={`mailto:${currentMessage?.email}`} 
-                  className="text-flutter hover:underline"
-                >
-                  {currentMessage?.email}
-                </a>
-              </div>
-              {currentMessage?.phone && (
-                <div className="flex items-center gap-2 text-sm">
-                  <Phone className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-medium">Phone:</span>
-                  <a 
-                    href={`tel:${currentMessage.phone}`} 
-                    className="text-flutter hover:underline"
-                  >
-                    {currentMessage.phone}
-                  </a>
-                </div>
-              )}
-            </div>
-            
-            <div className="bg-secondary p-4 rounded-md mt-2">
-              <p className="whitespace-pre-wrap">{currentMessage?.message}</p>
-            </div>
+                    </CardContent>
+                  </Card>
+                );
+              })()
+            ) : (
+              <Card>
+                <CardContent className="pt-6 text-center text-muted-foreground">
+                  <p>Select a message to view details</p>
+                </CardContent>
+              </Card>
+            )}
           </div>
-          <DialogFooter>
-            <Button 
-              variant="outline" 
-              onClick={() => setIsViewDialogOpen(false)}
-            >
-              Close
-            </Button>
-            <Button 
-              onClick={() => window.location.href = `mailto:${currentMessage?.email}`}
-            >
-              Reply via Email
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Dialog */}
-      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Message</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete this message? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="button" variant="destructive" onClick={handleDeleteMessage}>
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </div>
+      )}
     </div>
   );
 };

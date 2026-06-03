@@ -60,6 +60,36 @@ export const profileService = {
     const response = await api.put('/profile', profile);
     return response.data.profile;
   },
+
+  uploadAvatar: async (file: File): Promise<{ avatarUrl: string; profile: Profile }> => {
+    console.log('📸 [profileService] Uploading avatar:', file.name);
+    const formData = new FormData();
+    formData.append('avatar', file);
+
+    try {
+      // Don't set Content-Type header for FormData - let browser/axios handle it
+      const response = await api.post('/profile/avatar', formData, {
+        headers: {
+          'Content-Type': undefined,
+        },
+      });
+      console.log('✅ [profileService] Avatar uploaded successfully:', response.data);
+      return {
+        avatarUrl: response.data.avatarUrl,
+        profile: response.data.profile,
+      };
+    } catch (error) {
+      console.error('❌ [profileService] Avatar upload failed:', error);
+      throw error;
+    }
+  },
+
+  deleteAvatar: async (): Promise<Profile> => {
+    console.log('🗑️ [profileService] Deleting avatar');
+    const response = await api.delete('/profile/avatar');
+    console.log('✅ [profileService] Avatar deleted successfully');
+    return response.data.profile;
+  },
 };
 
 // ==================== Projects Services ====================

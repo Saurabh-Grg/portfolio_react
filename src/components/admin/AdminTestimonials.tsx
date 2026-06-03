@@ -1,379 +1,323 @@
-
 import { useState } from 'react';
-import { Plus, Pencil, Trash } from 'lucide-react';
+import { Trash2, Edit2, Plus, AlertCircle, Loader2, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-
-// Define Testimonial type
-interface Testimonial {
-  id: number;
-  quote: string;
-  author: string;
-  role: string;
-  company?: string;
-  avatar?: string;
-}
+import {
+  useTestimonials,
+  useCreateTestimonial,
+  useUpdateTestimonial,
+  useDeleteTestimonial,
+} from '@/hooks/useQueryHooks';
+import type { Testimonial } from '@/contexts/PortfolioContext';
 
 const AdminTestimonials = () => {
   const { toast } = useToast();
-  
-  // Mock testimonials data
-  const initialTestimonials: Testimonial[] = [
-    {
-      id: 1,
-      quote: "Saurabh is an exceptional Flutter developer. His attention to detail and ability to create beautiful, performant apps is unmatched. He delivered our project ahead of schedule and exceeded our expectations.",
-      author: "Rajiv Sharma",
-      role: "CTO",
-      company: "TechStart Solutions",
-      avatar: "https://via.placeholder.com/100"
-    },
-    {
-      id: 2,
-      quote: "Working with Saurabh was a pleasure. He has a deep understanding of Flutter and mobile development best practices. The app he created for us has received amazing feedback from our users.",
-      author: "Priya Patel",
-      role: "Product Manager",
-      company: "InnovateTech",
-      avatar: "https://via.placeholder.com/100"
-    },
-    {
-      id: 3,
-      quote: "Saurabh's expertise in Flutter helped us transform our idea into a beautiful, functional app. His communication was clear and he was always available to answer questions and make adjustments.",
-      author: "Amit Verma",
-      role: "Founder",
-      company: "MobileFirst Apps",
-      avatar: "https://via.placeholder.com/100"
-    }
-  ];
+  const { data: testimonials = [], isLoading, error, refetch } = useTestimonials();
+  const { mutate: createTestimonial, isPending: isCreating } = useCreateTestimonial();
+  const { mutate: updateTestimonial, isPending: isUpdating } = useUpdateTestimonial();
+  const { mutate: deleteTestimonial, isPending: isDeleting } = useDeleteTestimonial();
 
-  const [testimonials, setTestimonials] = useState<Testimonial[]>(initialTestimonials);
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [currentTestimonial, setCurrentTestimonial] = useState<Testimonial | null>(null);
-  
-  const [formData, setFormData] = useState<Omit<Testimonial, 'id'>>({
-    quote: '',
-    author: '',
-    role: '',
-    company: '',
-    avatar: ''
-  });
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [formData, setFormData] = useState<Partial<Testimonial>>({});
+  const [showForm, setShowForm] = useState(false);
 
-  const resetForm = () => {
-    setFormData({
-      quote: '',
-      author: '',
-      role: '',
-      company: '',
-      avatar: ''
-    });
-  };
+  console.log('📊 [AdminTestimonials] Rendering with testimonials:', testimonials);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
+    console.log(`📝 [AdminTestimonials] Input changed: ${name} = ${value}`);
+    setFormData((prev) => ({
       ...prev,
-      [name]: value
+      [name]: name === 'rating' ? parseInt(value) : value,
     }));
   };
 
   const handleAddTestimonial = () => {
-    const newTestimonial = {
-      ...formData,
-      id: testimonials.length ? Math.max(...testimonials.map(t => t.id)) + 1 : 1
-    };
-    
-    setTestimonials(prev => [...prev, newTestimonial]);
-    toast({
-      title: "Testimonial added",
-      description: `Testimonial from ${formData.author} has been added.`
-    });
-    resetForm();
-    setIsAddDialogOpen(false);
-  };
-
-  const handleEditClick = (testimonial: Testimonial) => {
-    setCurrentTestimonial(testimonial);
+    console.log('➕ [AdminTestimonials] Opening new testimonial form');
+    setEditingId(null);
     setFormData({
-      quote: testimonial.quote,
-      author: testimonial.author,
-      role: testimonial.role,
-      company: testimonial.company || '',
-      avatar: testimonial.avatar || ''
+      name: '',
+      role: '',
+      company: '',
+      content: '',
+      avatar_url: '',
+      rating: 5,
     });
-    setIsEditDialogOpen(true);
+    setShowForm(true);
   };
 
-  const handleUpdateTestimonial = () => {
-    if (!currentTestimonial) return;
-    
-    setTestimonials(prev => prev.map(testimonial => 
-      testimonial.id === currentTestimonial.id ? { ...testimonial, ...formData } : testimonial
-    ));
-    
-    toast({
-      title: "Testimonial updated",
-      description: `Testimonial from ${formData.author} has been updated.`
-    });
-    resetForm();
-    setIsEditDialogOpen(false);
+  const handleEditTestimonial = (testimonial: Testimonial) => {
+    console.log('✏️ [AdminTestimonials] Editing testimonial:', testimonial);
+    setEditingId(testimonial.id);
+    setFormData(testimonial);
+    setShowForm(true);
   };
 
-  const handleDeleteClick = (testimonial: Testimonial) => {
-    setCurrentTestimonial(testimonial);
-    setIsDeleteDialogOpen(true);
+  const handleSave = () => {
+    if (!formData.name || !formData.content) {
+      console.warn('⚠️ [AdminTestimonials] Name and content are required');
+      toast({
+        title: 'Error',
+        description: 'Name and content are required',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    console.log('💾 [AdminTestimonials] Saving testimonial:', formData);
+
+    if (editingId) {
+      updateTestimonial(
+        { id: editingId, ...formData },
+        {
+          onSuccess: () => {
+            console.log('✅ [AdminTestimonials] Testimonial updated');
+            toast({ title: 'Success', description: 'Testimonial updated successfully!' });
+            setShowForm(false);
+            setFormData({});
+            refetch();
+          },
+          onError: (err: any) => {
+            console.error('❌ [AdminTestimonials] Update failed:', err);
+            toast({
+              title: 'Error',
+              description: err?.message || 'Failed to update testimonial',
+              variant: 'destructive',
+            });
+          },
+        }
+      );
+    } else {
+      createTestimonial(formData as Omit<Testimonial, 'id'>, {
+        onSuccess: () => {
+          console.log('✅ [AdminTestimonials] Testimonial created');
+          toast({ title: 'Success', description: 'Testimonial created successfully!' });
+          setShowForm(false);
+          setFormData({});
+          refetch();
+        },
+        onError: (err: any) => {
+          console.error('❌ [AdminTestimonials] Create failed:', err);
+          toast({
+            title: 'Error',
+            description: err?.message || 'Failed to create testimonial',
+            variant: 'destructive',
+          });
+        },
+      });
+    }
   };
 
-  const handleDeleteTestimonial = () => {
-    if (!currentTestimonial) return;
-    
-    setTestimonials(prev => prev.filter(testimonial => testimonial.id !== currentTestimonial.id));
-    toast({
-      title: "Testimonial deleted",
-      description: `Testimonial from ${currentTestimonial.author} has been removed.`
-    });
-    setIsDeleteDialogOpen(false);
+  const handleDelete = (id: number) => {
+    if (window.confirm('Are you sure you want to delete this testimonial?')) {
+      console.log('🗑️ [AdminTestimonials] Deleting testimonial:', id);
+      deleteTestimonial(id, {
+        onSuccess: () => {
+          console.log('✅ [AdminTestimonials] Testimonial deleted');
+          toast({ title: 'Success', description: 'Testimonial deleted successfully!' });
+          refetch();
+        },
+        onError: (err: any) => {
+          console.error('❌ [AdminTestimonials] Delete failed:', err);
+          toast({
+            title: 'Error',
+            description: err?.message || 'Failed to delete testimonial',
+            variant: 'destructive',
+          });
+        },
+      });
+    }
   };
 
-  // Function to truncate text
-  const truncate = (text: string, maxLength: number) => {
-    return text.length > maxLength ? `${text.substring(0, maxLength)}...` : text;
-  };
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary" />
+          <p className="text-muted-foreground">Loading testimonials...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex justify-between items-center">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Testimonials</h2>
-          <p className="text-muted-foreground">
-            Manage client and peer feedback about your work.
-          </p>
+          <p className="text-muted-foreground">Manage client testimonials and reviews</p>
         </div>
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-1">
-              <Plus className="h-4 w-4" />
-              Add Testimonial
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px]">
-            <DialogHeader>
-              <DialogTitle>Add New Testimonial</DialogTitle>
-              <DialogDescription>
-                Add a new testimonial from a client or colleague.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="quote">Testimonial Quote</Label>
-                <Textarea
-                  id="quote"
-                  name="quote"
-                  value={formData.quote}
-                  onChange={handleInputChange}
-                  rows={4}
-                />
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="author">Author Name</Label>
-                  <Input
-                    id="author"
-                    name="author"
-                    value={formData.author}
-                    onChange={handleInputChange}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="role">Author Role/Position</Label>
-                  <Input
-                    id="role"
-                    name="role"
-                    value={formData.role}
-                    onChange={handleInputChange}
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="company">Company/Organization (Optional)</Label>
-                <Input
-                  id="company"
-                  name="company"
-                  value={formData.company}
-                  onChange={handleInputChange}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="avatar">Avatar URL (Optional)</Label>
-                <Input
-                  id="avatar"
-                  name="avatar"
-                  value={formData.avatar}
-                  onChange={handleInputChange}
-                  placeholder="https://example.com/avatar.jpg"
-                />
-                <p className="text-xs text-muted-foreground">
-                  URL to the author's profile picture
-                </p>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="button" onClick={handleAddTestimonial}>
-                Add Testimonial
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <Button onClick={handleAddTestimonial} disabled={isCreating || isUpdating}>
+          <Plus className="h-4 w-4 mr-2" />
+          Add Testimonial
+        </Button>
       </div>
 
-      {/* Testimonials Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {testimonials.map((testimonial) => (
-          <Card key={testimonial.id} className="overflow-hidden">
-            <CardContent className="p-6">
-              <div className="mb-6">
-                <svg className="w-8 h-8 text-flutter opacity-50" fill="currentColor" viewBox="0 0 32 32">
-                  <path d="M10 8c-2.209 0-4 1.791-4 4v10c0 2.209 1.791 4 4 4h10c2.209 0 4-1.791 4-4v-10c0-2.209-1.791-4-4-4h-10zM8 14c0-1.103 0.897-2 2-2h10c1.103 0 2 0.897 2 2v10c0 1.103-0.897 2-2 2h-10c-1.103 0-2-0.897-2-2v-10z"></path>
-                  <path d="M16.599 20.599l2.001-2.001c1.103-1.103 2.899-1.103 4.001 0l0 0c1.103 1.103 1.103 2.899 0 4.001l-2.001 2.001c-1.103 1.103-2.899 1.103-4.001 0l0 0c-1.103-1.103-1.103-2.899 0-4.001z"></path>
-                  <path d="M8.999 12.999l2.001-2.001c1.103-1.103 2.899-1.103 4.001 0l0 0c1.103 1.103 1.103 2.899 0 4.001l-2.001 2.001c-1.103 1.103-2.899 1.103-4.001 0l0 0c-1.103-1.103-1.103-2.899 0-4.001z"></path>
-                </svg>
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>Failed to load testimonials</AlertDescription>
+        </Alert>
+      )}
+
+      {showForm && (
+        <Card>
+          <CardHeader>
+            <CardTitle>{editingId ? 'Edit Testimonial' : 'New Testimonial'}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Name</Label>
+                <Input
+                  id="name"
+                  name="name"
+                  value={formData.name || ''}
+                  onChange={handleInputChange}
+                  disabled={isCreating || isUpdating}
+                />
               </div>
-              <blockquote className="text-lg mb-6">{truncate(testimonial.quote, 150)}</blockquote>
-              <div className="flex items-center">
-                {testimonial.avatar ? (
-                  <div className="w-12 h-12 rounded-full overflow-hidden mr-4">
-                    <img 
-                      src={testimonial.avatar} 
-                      alt={testimonial.author} 
-                      className="w-full h-full object-cover" 
+              <div className="space-y-2">
+                <Label htmlFor="role">Role/Title</Label>
+                <Input
+                  id="role"
+                  name="role"
+                  value={formData.role || ''}
+                  onChange={handleInputChange}
+                  disabled={isCreating || isUpdating}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="company">Company</Label>
+              <Input
+                id="company"
+                name="company"
+                value={formData.company || ''}
+                onChange={handleInputChange}
+                disabled={isCreating || isUpdating}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="content">Testimonial</Label>
+              <Textarea
+                id="content"
+                name="content"
+                value={formData.content || ''}
+                onChange={handleInputChange}
+                disabled={isCreating || isUpdating}
+                rows={4}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="avatar_url">Avatar URL</Label>
+              <Input
+                id="avatar_url"
+                name="avatar_url"
+                value={formData.avatar_url || ''}
+                onChange={handleInputChange}
+                disabled={isCreating || isUpdating}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="rating">Rating</Label>
+              <select
+                id="rating"
+                name="rating"
+                value={formData.rating || 5}
+                onChange={handleInputChange as any}
+                disabled={isCreating || isUpdating}
+                className="w-full px-3 py-2 border rounded-md"
+              >
+                <option value="1">1 Star</option>
+                <option value="2">2 Stars</option>
+                <option value="3">3 Stars</option>
+                <option value="4">4 Stars</option>
+                <option value="5">5 Stars</option>
+              </select>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={handleSave} disabled={isCreating || isUpdating}>
+                {isCreating || isUpdating ? 'Saving...' : 'Save'}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowForm(false);
+                  setFormData({});
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {testimonials.map((testimonial) => (
+          <Card key={testimonial.id}>
+            <CardHeader>
+              <div className="flex justify-between items-start">
+                <div className="flex gap-3">
+                  {testimonial.avatar_url && (
+                    <img
+                      src={testimonial.avatar_url}
+                      alt={testimonial.name}
+                      className="w-12 h-12 rounded-full object-cover"
                     />
-                  </div>
-                ) : (
-                  <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mr-4">
-                    <span className="text-xl font-medium">{testimonial.author.charAt(0)}</span>
-                  </div>
-                )}
-                <div className="flex-1">
-                  <div className="font-medium">{testimonial.author}</div>
-                  <div className="text-sm text-muted-foreground">
-                    {testimonial.role}{testimonial.company && `, ${testimonial.company}`}
+                  )}
+                  <div>
+                    <CardTitle className="text-lg">{testimonial.name}</CardTitle>
+                    <CardDescription>{testimonial.role}</CardDescription>
                   </div>
                 </div>
-                <div className="flex space-x-2">
-                  <Button variant="ghost" size="icon" onClick={() => handleEditClick(testimonial)}>
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(testimonial)}>
-                    <Trash className="h-4 w-4" />
-                  </Button>
-                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex gap-1">
+                {[...Array(testimonial.rating || 0)].map((_, i) => (
+                  <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                ))}
+              </div>
+              <p className="text-sm italic">"{testimonial.content}"</p>
+              <p className="text-xs text-muted-foreground">{testimonial.company}</p>
+              <div className="flex gap-2 pt-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleEditTestimonial(testimonial)}
+                  disabled={isUpdating || isDeleting}
+                >
+                  <Edit2 className="h-4 w-4 mr-1" />
+                  Edit
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => handleDelete(testimonial.id)}
+                  disabled={isDeleting}
+                >
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  Delete
+                </Button>
               </div>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      {/* Edit Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>Edit Testimonial</DialogTitle>
-            <DialogDescription>
-              Update the testimonial details.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="edit-quote">Testimonial Quote</Label>
-              <Textarea
-                id="edit-quote"
-                name="quote"
-                value={formData.quote}
-                onChange={handleInputChange}
-                rows={4}
-              />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-author">Author Name</Label>
-                <Input
-                  id="edit-author"
-                  name="author"
-                  value={formData.author}
-                  onChange={handleInputChange}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-role">Author Role/Position</Label>
-                <Input
-                  id="edit-role"
-                  name="role"
-                  value={formData.role}
-                  onChange={handleInputChange}
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-company">Company/Organization (Optional)</Label>
-              <Input
-                id="edit-company"
-                name="company"
-                value={formData.company}
-                onChange={handleInputChange}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-avatar">Avatar URL (Optional)</Label>
-              <Input
-                id="edit-avatar"
-                name="avatar"
-                value={formData.avatar}
-                onChange={handleInputChange}
-                placeholder="https://example.com/avatar.jpg"
-              />
-              <p className="text-xs text-muted-foreground">
-                URL to the author's profile picture
-              </p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="button" onClick={handleUpdateTestimonial}>
-              Update Testimonial
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Dialog */}
-      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Testimonial</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete this testimonial? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="button" variant="destructive" onClick={handleDeleteTestimonial}>
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {testimonials.length === 0 && !showForm && (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>No testimonials yet. Add your first one!</AlertDescription>
+        </Alert>
+      )}
     </div>
   );
 };
